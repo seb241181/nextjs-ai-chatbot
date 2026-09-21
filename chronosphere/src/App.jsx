@@ -5,6 +5,7 @@ import './App.css'
 const STRIPE_LINK = 'https://buy.stripe.com/bJe00k2aB9lo9jQdGBc7u00'
 const STORAGE_KEY = 'chronosphere_state'
 const ARCHIVE_KEY = 'chronosphere_archive'
+const NATAL_PROFILE_KEY = 'chronosphere_natal_profile'
 
 // ─── 58 CARTES ORACLE ──────────────────────────────────────────────────────────
 const CARDS = [
@@ -69,7 +70,7 @@ const CARDS = [
 ]
 
 // ─── MOTEUR ASTROLOGIQUE ───────────────────────────────────────────────────────
-function getAstroContext(birthTime) {
+function getAstroContext() {
   const now = new Date()
   const hour = now.getHours()
   const dayOfWeek = now.getDay()
@@ -83,14 +84,7 @@ function getAstroContext(birthTime) {
     hour < 12 ? 'dynamique et créatrice' :
     hour < 18 ? 'ancrée et productive' : 'réflexive et profonde'
 
-  let birthContext = null
-  if (birthTime) {
-    const bh = parseInt(birthTime.split(':')[0], 10)
-    const risingSign = ['Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge',
-      'Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'][Math.floor(bh / 2) % 12]
-    birthContext = { risingSign }
-  }
-  return { moonPhase, planetOfDay, hourEnergies, birthContext }
+  return { moonPhase, planetOfDay, hourEnergies }
 }
 
 // ─── TIRAGE QUANTIQUE ─────────────────────────────────────────────────────────
@@ -121,10 +115,10 @@ function SplashScreen({ onEnter }) {
       <div className="splash__content">
         <div className="splash__symbol">∞</div>
         <h1 className="splash__title">ChronoSphère</h1>
-        <p className="splash__subtitle">Oracle des 58 Arcanes du Temps</p>
-        <p className="splash__tagline">Chaque tirage est une porte vers ta vérité</p>
+        <p className="splash__subtitle">Thème natal · Cycles · Oracle</p>
+        <p className="splash__tagline">Du ciel de naissance à la ligne de temps présente</p>
         <button className="btn btn--primary btn--lg" onClick={onEnter}>
-          Entrer dans l&apos;Oracle
+          Entrer dans ChronoSphère
         </button>
       </div>
     </div>
@@ -163,7 +157,7 @@ function OracleCard({ card, revealed, onReveal, isPremium }) {
 }
 
 // ─── PANNEAU ASTROLOGIQUE ─────────────────────────────────────────────────────
-function AstroPanel({ astro }) {
+function AstroPanel({ astro, profile }) {
   return (
     <div className="astro-panel">
       <div className="astro-panel__item">
@@ -178,13 +172,157 @@ function AstroPanel({ astro }) {
         <span>🕐</span>
         <span>Énergie {astro.hourEnergies}</span>
       </div>
-      {astro.birthContext && (
+      {profile?.date && (
         <div className="astro-panel__item astro-panel__item--gold">
-          <span>👑</span>
-          <span>Ascendant probable : <strong>{astro.birthContext.risingSign}</strong></span>
+          <span>✦</span>
+          <span>Relié au ciel natal de <strong>{profile.firstName || 'ton profil'}</strong></span>
         </div>
       )}
     </div>
+  )
+}
+
+// ─── PARCOURS CHRONOSPHÈRE ──────────────────────────────────────────────────
+const EMPTY_NATAL_PROFILE = {
+  firstName: '', date: '', time: '', place: '', houseSystem: 'placidus',
+}
+
+function JourneyIntro({ profile, onNavigate }) {
+  const steps = [
+    {
+      id: 'theme', number: '01', eyebrow: 'Le socle', icon: '◎',
+      title: 'Mon thème astral',
+      text: 'La structure de naissance : planètes, maisons, aspects et grands équilibres.',
+      action: profile?.date ? 'Voir mon profil natal' : 'Créer mon profil natal',
+    },
+    {
+      id: 'energy', number: '02', eyebrow: 'Le passage', icon: '◐',
+      title: 'Mon énergie actuelle',
+      text: 'Le mouvement du présent mis en résonance avec ton ciel de naissance.',
+      action: 'Lire le moment présent',
+    },
+    {
+      id: 'oracle', number: '03', eyebrow: 'La ligne de temps', icon: '✦',
+      title: 'Mon tirage ChronoSphère',
+      text: 'Une carte pour éclairer ce qui cherche à se révéler maintenant.',
+      action: 'Ouvrir le tirage',
+    },
+  ]
+
+  return (
+    <section className="journey" aria-labelledby="journey-title">
+      <div className="journey__hero">
+        <span className="journey__kicker">TON CIEL · TON PRÉSENT · TON PASSAGE</span>
+        <h1 id="journey-title">Une seule lecture,<br />trois portes.</h1>
+        <p>ChronoSphère ne mélange pas l&apos;astrologie et l&apos;Oracle : elle les relie dans un parcours clair.</p>
+      </div>
+      <div className="journey__steps">
+        {steps.map(step => (
+          <article className="journey-card" key={step.id}>
+            <div className="journey-card__top">
+              <span className="journey-card__number">{step.number}</span>
+              <span className="journey-card__icon">{step.icon}</span>
+            </div>
+            <span className="journey-card__eyebrow">{step.eyebrow}</span>
+            <h2>{step.title}</h2>
+            <p>{step.text}</p>
+            <button className="journey-card__action" onClick={() => onNavigate(step.id)}>
+              {step.action} <span aria-hidden="true">→</span>
+            </button>
+          </article>
+        ))}
+      </div>
+      <p className="journey__truth">
+        <span>Note de précision</span> Le calcul astronomique réel sera le seul à produire le Soleil,
+        la Lune, l&apos;Ascendant, les maisons et les aspects. Aucune position n&apos;est devinée par l&apos;IA.
+      </p>
+    </section>
+  )
+}
+
+function NatalProfile({ profile, onSave }) {
+  const [draft, setDraft] = useState(profile || EMPTY_NATAL_PROFILE)
+  const [saved, setSaved] = useState(false)
+
+  const update = (field) => (event) => {
+    setDraft(current => ({ ...current, [field]: event.target.value }))
+    setSaved(false)
+  }
+
+  const submit = (event) => {
+    event.preventDefault()
+    onSave(draft)
+    setSaved(true)
+  }
+
+  return (
+    <section className="portal-section">
+      <div className="section-heading">
+        <span className="section-heading__index">PORTE 01</span>
+        <h1>Mon thème astral</h1>
+        <p>Le socle permanent de ton voyage ChronoSphère.</p>
+      </div>
+      <form className="natal-form" onSubmit={submit}>
+        <label>
+          <span>Prénom <small>(facultatif)</small></span>
+          <input value={draft.firstName} onChange={update('firstName')} placeholder="Comment devons-nous t'appeler ?" />
+        </label>
+        <div className="natal-form__row">
+          <label>
+            <span>Date de naissance</span>
+            <input required type="date" value={draft.date} onChange={update('date')} />
+          </label>
+          <label>
+            <span>Heure exacte</span>
+            <input required type="time" value={draft.time} onChange={update('time')} />
+          </label>
+        </div>
+        <label>
+          <span>Lieu de naissance</span>
+          <input required value={draft.place} onChange={update('place')} placeholder="Ville, pays" />
+        </label>
+        <label>
+          <span>Système de maisons</span>
+          <select value={draft.houseSystem} onChange={update('houseSystem')}>
+            <option value="placidus">Placidus</option>
+            <option value="whole-sign">Maisons entières</option>
+            <option value="equal">Maisons égales</option>
+          </select>
+        </label>
+        <div className="precision-note">
+          <span>◉</span>
+          <p><strong>Pourquoi l&apos;heure exacte compte</strong> Elle détermine notamment l&apos;Ascendant et les maisons. ChronoSphère ne proposera jamais un ascendant approximatif dans un thème vendu.</p>
+        </div>
+        <button className="btn btn--primary btn--lg" type="submit">Enregistrer mon ciel de naissance</button>
+        {saved && <p className="form-success" role="status">✦ Profil natal enregistré. Il est prêt pour le futur moteur de calcul précis.</p>}
+      </form>
+    </section>
+  )
+}
+
+function CurrentEnergy({ astro, profile, onOpenOracle }) {
+  return (
+    <section className="portal-section">
+      <div className="section-heading">
+        <span className="section-heading__index">PORTE 02</span>
+        <h1>Mon énergie actuelle</h1>
+        <p>Le ciel du moment devient un passage, jamais une fatalité.</p>
+      </div>
+      {astro && <AstroPanel astro={astro} profile={profile} />}
+      <div className="energy-reading">
+        <span className="energy-reading__orb">◐</span>
+        <div>
+          <span className="energy-reading__label">CLIMAT SYMBOLIQUE DU MOMENT</span>
+          <h2>Une énergie {astro?.hourEnergies}</h2>
+          <p>
+            {profile?.date
+              ? `Ce passage sera bientôt confronté au thème natal de ${profile.firstName || 'ton profil'}, à partir de données astronomiques vérifiées.`
+              : 'Crée ton profil natal pour que cette lecture puisse bientôt être reliée à ton propre ciel.'}
+          </p>
+        </div>
+      </div>
+      <button className="btn btn--gold btn--lg" onClick={onOpenOracle}>Éclairer ce passage par une carte</button>
+    </section>
   )
 }
 
@@ -254,24 +392,6 @@ function PremiumModal({ onClose }) {
   )
 }
 
-// ─── SAISIE HEURE DE NAISSANCE ────────────────────────────────────────────────
-function BirthTimeInput({ birthTime, onChange }) {
-  return (
-    <div className="birth-time">
-      <label className="birth-time__label" htmlFor="birthtime">
-        🕐 Heure de naissance <span className="birth-time__hint">(calcul de l&apos;ascendant)</span>
-      </label>
-      <input
-        id="birthtime"
-        type="time"
-        className="birth-time__input"
-        value={birthTime}
-        onChange={e => onChange(e.target.value)}
-      />
-    </div>
-  )
-}
-
 // ─── APP PRINCIPALE ────────────────────────────────────────────────────────────
 export default function App() {
   const [showSplash, setShowSplash] = useState(true)
@@ -281,10 +401,10 @@ export default function App() {
   const [isPremium, setIsPremium] = useState(false)
   const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [archive, setArchive] = useState([])
-  const [birthTime, setBirthTime] = useState('')
+  const [natalProfile, setNatalProfile] = useState(EMPTY_NATAL_PROFILE)
   const [drawCount, setDrawCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('oracle')
+  const [activeTab, setActiveTab] = useState('journey')
 
   const FREE_LIMIT = 3
 
@@ -293,8 +413,9 @@ export default function App() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
       if (saved.isPremium) setIsPremium(true)
-      if (saved.birthTime) setBirthTime(saved.birthTime)
       if (saved.drawCount) setDrawCount(saved.drawCount)
+      const savedNatalProfile = JSON.parse(localStorage.getItem(NATAL_PROFILE_KEY) || 'null')
+      if (savedNatalProfile) setNatalProfile(savedNatalProfile)
       const savedArchive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]')
       setArchive(savedArchive)
     } catch { /* ignore */ }
@@ -303,20 +424,21 @@ export default function App() {
   // Sauvegarde dans localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ isPremium, birthTime, drawCount }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ isPremium, drawCount }))
     } catch { /* ignore */ }
-  }, [isPremium, birthTime, drawCount])
+  }, [isPremium, drawCount])
 
   // Contexte astrologique mis à jour chaque minute
   useEffect(() => {
-    const update = () => setAstro(getAstroContext(birthTime))
+    const update = () => setAstro(getAstroContext())
     update()
     const id = setInterval(update, 60000)
     return () => clearInterval(id)
-  }, [birthTime])
+  }, [])
 
-  const handleBirthTimeChange = useCallback((val) => {
-    setBirthTime(val)
+  const saveNatalProfile = useCallback((profile) => {
+    setNatalProfile(profile)
+    try { localStorage.setItem(NATAL_PROFILE_KEY, JSON.stringify(profile)) } catch { /* ignore */ }
   }, [])
 
   const drawCard = useCallback(async () => {
@@ -379,6 +501,24 @@ export default function App() {
       {/* NAVIGATION */}
       <nav className="nav">
         <button
+          className={`nav__tab ${activeTab === 'journey' ? 'nav__tab--active' : ''}`}
+          onClick={() => setActiveTab('journey')}
+        >
+          ∞ Parcours
+        </button>
+        <button
+          className={`nav__tab ${activeTab === 'theme' ? 'nav__tab--active' : ''}`}
+          onClick={() => setActiveTab('theme')}
+        >
+          ◎ Thème
+        </button>
+        <button
+          className={`nav__tab ${activeTab === 'energy' ? 'nav__tab--active' : ''}`}
+          onClick={() => setActiveTab('energy')}
+        >
+          ◐ Énergie
+        </button>
+        <button
           className={`nav__tab ${activeTab === 'oracle' ? 'nav__tab--active' : ''}`}
           onClick={() => setActiveTab('oracle')}
         >
@@ -395,15 +535,31 @@ export default function App() {
       </nav>
 
       <main className="main">
-        {activeTab === 'oracle' ? (
+        {activeTab === 'journey' && (
+          <JourneyIntro profile={natalProfile} onNavigate={setActiveTab} />
+        )}
+
+        {activeTab === 'theme' && (
+          <NatalProfile profile={natalProfile} onSave={saveNatalProfile} />
+        )}
+
+        {activeTab === 'energy' && (
+          <CurrentEnergy
+            astro={astro}
+            profile={natalProfile}
+            onOpenOracle={() => setActiveTab('oracle')}
+          />
+        )}
+
+        {activeTab === 'oracle' && (
           <>
             {/* CONTEXTE ASTRO */}
-            {astro && <AstroPanel astro={astro} />}
-
-            {/* HEURE DE NAISSANCE (Premium) */}
-            {isPremium && (
-              <BirthTimeInput birthTime={birthTime} onChange={handleBirthTimeChange} />
-            )}
+            <div className="section-heading section-heading--compact">
+              <span className="section-heading__index">PORTE 03</span>
+              <h1>Mon tirage ChronoSphère</h1>
+              <p>Une carte éclaire le présent ; elle ne remplace jamais ton thème natal.</p>
+            </div>
+            {astro && <AstroPanel astro={astro} profile={natalProfile} />}
 
             {/* JAUGE FREEMIUM */}
             {!isPremium && (
@@ -451,14 +607,16 @@ export default function App() {
               </div>
             )}
           </>
-        ) : (
+        )}
+
+        {activeTab === 'archive' && (
           <ArchivePanel archive={archive} onClear={clearArchive} />
         )}
       </main>
 
       {/* FOOTER */}
       <footer className="footer">
-        <p>ChronoSphère 999 · Oracle des Arcanes du Temps</p>
+        <p>ChronoSphère 999 · Le ciel, le présent, la ligne de temps</p>
         {!isPremium && (
           <button className="footer__link" onClick={() => setShowPremiumModal(true)}>
             Activer Souveraineté Plus
